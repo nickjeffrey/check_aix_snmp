@@ -1,0 +1,180 @@
+#!/usr/bin/perl
+
+
+# CHANGE LOG
+# ----------
+#   2007/04/13	njeffrey@anisoftgroup.com	Script created
+#   2007/10/17	njeffrey@anisoftgroup.com	Add -r 2 -t 5 (retry 2 times, 5 second timeout for snmpget  commands)
+#   2007/10/17	njeffrey@anisoftgroup.com	Add -t 2 -w 5 (retry 2 times, 5 second timeout for snmpinfo commands)
+
+
+
+# Nagios check to confirm the status of the AIX SNMP agent
+# Written April 2007 by Nick Jeffrey <njeffrey@anisoftgroup.com>
+
+
+# NOTES
+# -----
+#
+# syntax:   check_aix_snmp COMMUNITY HOSTNAME
+#
+# This script is AIX-specific, as we check 3 different parts of the MIB tree
+#    .iso.org.dod.internet.mgmt.mib-2.host.hrSystem.hrSystemUptime                       
+#    .iso.org.dod.internet.private.enterprises.ibm.ibmProd.ibmAIX.aixSystem.aixSystemEnvironment  .1.3.6.1.4.1.2.6.191.1.2.1.0
+#    .iso.org.dod.internet.private.enterprises.ibm.ibmAgents.aix.aixRISC6000.risc6000private.risc6000perf.xmd.xmdCPU.xmdCPUEntry.xmdCPUIndex  .1.3.6.1.4.1.2.3.1.2.2.2.1.1.1.1.1
+#
+# If any one of these sections of the MIB tree fail to respond, generate an error
+#
+# Please note that we use 2>&1 to redirect STDERR to STDOUT.  This ensures we only ever return a single line
+# as script output, which is required by nagios.
+#
+# You should only use this check against AIX machines, as other operating systems will not respond to the AIX MIB or xmd MIB.
+#
+
+
+#predeclare all variables
+my $community;
+my $hostname;
+my $OK;
+my $WARN;
+my $CRITICAL;
+my $UNKNOWN; 
+my $CHECK_NAME;
+my $status;
+my $snmpget;
+my $oid;
+
+#
+# Command line arguments
+#
+$community = $ARGV[0];					#get SNMP community name from command line parameter
+$community = "NALpriv"    if ( $community eq "" );	#assign a default SNMP community name if command line parameter missing
+$hostname  = $ARGV[1];					#get hostname of machine to check from command line parameter
+$hostname  = `hostname`  if ( $hostname eq "" );	#assign a default hostname if command line parameter missing
+$hostname  = "localhost" if ( $hostname eq "" );	#default to localhost if hostname could not be determined
+chomp $hostname;					#remove newline character from hostname
+
+
+
+#
+# Nagios return codes
+#
+$OK=0;
+$WARN=1;
+$CRITICAL=2;
+$UNKNOWN=3;
+
+
+
+#
+# Other values
+#
+$CHECK_NAME="SNMP Agent status";
+
+
+
+#
+# Find an appropriate SNMP query tool 
+#
+$snmpget = "/usr/bin/snmpinfo      -t 2 -w 5 -v 1 -c $community -h $hostname"   if ( -e "/usr/bin/snmpinfo" );
+$snmpget = "/usr/local/bin/snmpget -r 2 -t 5 -v 1 -c $community    $hostname"   if ( -e "/usr/local/bin/snmpget" );
+$snmpget = "/usr/bin/snmpget       -r 2 -t 5 -v 1 -c $community    $hostname"   if ( -e "/usr/bin/snmpget" );
+
+
+
+#
+# Confirm the remote host is up
+#
+open(IN,"ping -c 1 -w 1 $hostname 2>&1 |");	#send a single ping to the remote host and wait 1 second for a reply
+while (<IN>) {                          	#read a line from STDIN
+   if ( /100% packet loss/ ) {			#check for ping timeouts (indicates host may be down)
+      $status = "$CHECK_NAME UNKNOWN -- no ping reply from $hostname \n";
+      print $status;				#print error message
+      exit $UNKNOWN;				#exit script
+   } 						#end of if block
+   if ( /NOT FOUND/ ) {				#check for invalid hostname (using AIX ping)
+      $status = "$CHECK_NAME UNKNOWN -- could not resolve hostname $hostname \n";
+      print $status;				#print error message
+      exit $UNKNOWN;				#exit script
+   } 						#end of if block
+   if ( /unknown host/ ) {			#check for invalid hostname (using Linux ping)
+      $status = "$CHECK_NAME UNKNOWN -- could not resolve hostname $hostname \n";
+      print $status;				#print error message
+      exit $UNKNOWN;				#exit script
+   } 						#end of if block
+   if ( /no route to host/ ) {			#check for routing problems
+      $status = "$CHECK_NAME UNKNOWN -- could not find a route to $hostname - check routing tables \n";
+      print $status;				#print error message
+      exit $UNKNOWN;				#exit script
+   } 						#end of if block
+}						#end of while loop
+close IN;					#close filehandle
+
+
+#
+# Check the host-resources MIB 
+# .iso.org.dod.internet.mgmt.mib-2.host.hrSystem.hrSystemUptime  
+#
+$oid = ".1.3.6.1.2.1.25.1.1.0";
+open(IN,"$snmpget $oid 2>&1 |"); 	#open a filehandle for reading 
+while (<IN>) {                          	#read a line from STDIN
+   if ( /Timeticks/ ) {                		#look for a response to the snmp query
+      $status = "$CHECK_NAME OK -- SNMP response from $hostname on $oid \n";
+   } else {   
+      $status = "$CHECK_NAME CRITICAL -- no SNMP response from $hostname on host-resources MIB $oid  \n";
+      print $status;				#print error message
+      exit $CRITICAL;				#exit script 
+   }						#end of if/else block
+}						#end of while loop
+close IN;					#close filehandle
+
+
+
+#
+# Check the AIX MIB 
+# .iso.org.dod.internet.private.enterprises.ibm.ibmProd.ibmAIX.aixSystem.aixSystemEnvironment 
+#
+$oid = ".1.3.6.1.4.1.2.6.191.1.2.1.0";
+open(IN,"$snmpget $oid 2>&1 |"); 	#open a filehandle for reading 
+while (<IN>) {                          	#read a line from STDIN
+   if ( /INTEGER/ ) {                 		#look for a response to the snmp query
+      $status = "$CHECK_NAME OK -- SNMP response from $hostname on $oid \n";
+   } else {
+      $status = "$CHECK_NAME CRITICAL -- no SNMP response from $hostname on $oid.  This is the AIX MIB.  Confirm $hostname runs AIX, and the relevant section is uncommented from /etc/snmpdv3.conf. \n";
+      print $status;				#print error message
+      exit $CRITICAL;				#exit script 
+   }						#end of if/else block
+}						#end of while loop
+close IN;					#close filehandle
+
+
+#
+# Check the xmd MIB (provided by Performance Toolbox)
+# .iso.org.dod.internet.private.enterprises.ibm.ibmAgents.aix.aixRISC6000.risc6000private.risc6000perf.xmd.xmdCPU.xmdCPUEntry.xmdCPUIndex
+#
+$oid = ".1.3.6.1.4.1.2.3.1.2.2.2.1.1.1.1.1";
+open(IN,"$snmpget $oid 2>&1 |"); 	#open a filehandle for reading 
+while (<IN>) {                          	#read a line from STDIN
+   if ( /INTEGER/ ) {                 		#look for a response to the snmp query
+      $status = "$CHECK_NAME OK -- SNMP response from $hostname on $oid \n";
+   } else {
+      $status = "$CHECK_NAME CRITICAL -- no SNMP response from $hostname on $oid.  This is the enterprise MIB for PTX.  Confirm $hostname runs AIX, and that xmservd is running. Try running /usr/local/bin/enable_snmp.sh\n";
+      print $status;				#print error message
+      exit $CRITICAL;				#exit script 
+   }						#end of if/else block
+}						#end of while loop
+close IN;					#close filehandle
+
+
+
+#
+# If we get this far, no errors were found.  Print the most recent OK message and exit 
+#
+print $status;
+exit $OK;
+
+
+#
+# ---  End of script  --------------------------------------------------------
+#
+
