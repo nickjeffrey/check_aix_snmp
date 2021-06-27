@@ -6,13 +6,38 @@
 #   2007/04/13	njeffrey 	Script created
 #   2007/10/17	njeffrey 	Add -r 2 -t 5 (retry 2 times, 5 second timeout for snmpget  commands)
 #   2007/10/17	njeffrey 	Add -t 2 -w 5 (retry 2 times, 5 second timeout for snmpinfo commands)
+#   2021/06/27	njeffrey 	Documentation updates
 
 
 
 # Nagios check to confirm the status of the AIX SNMP agent
 
-
-
+# CONFIGURATION
+#
+# This script is executed on the nagios server, and queries a remote AIX host to confirm the AIX SNMP daemons are running
+#
+# You will need a section in the services.cfg file on the nagios server that looks similar to the following.
+#    # Define service to peform SNMP queries against remote AIX machine to confirm AIX SNMP daemons are running
+#    # Pass the SNMP community string as the only parameter
+#    define service {
+#       use                             generic-service
+#       hostgroup_name                  all_aix,all_vio
+#       service_description             AIX SNMP
+#       check_command                   check_aix_snmp!public
+#       }
+#
+#
+#
+# You will also need a command definition similar to the following in the commands.cfg file:
+#    # check_aix_snmp command definition
+#    # adjust SNMP community name as appropriate
+#    define command{
+#       command_name    check_aix_snmp
+#       command_line    $USER1$/check_aix_snmp public $HOSTADDRESS$
+#       }
+#
+#
+#
 # NOTES
 # -----
 #
@@ -48,7 +73,7 @@ my $oid;
 # Command line arguments
 #
 $community = $ARGV[0];					#get SNMP community name from command line parameter
-$community = "NALpriv"    if ( $community eq "" );	#assign a default SNMP community name if command line parameter missing
+$community = "public"    if ( $community eq "" );	#assign a default SNMP community name if command line parameter missing
 $hostname  = $ARGV[1];					#get hostname of machine to check from command line parameter
 $hostname  = `hostname`  if ( $hostname eq "" );	#assign a default hostname if command line parameter missing
 $hostname  = "localhost" if ( $hostname eq "" );	#default to localhost if hostname could not be determined
@@ -74,7 +99,7 @@ $CHECK_NAME="SNMP Agent status";
 
 
 #
-# Find an appropriate SNMP query tool 
+# Find an appropriate SNMP query tool (/usr/bin/snmpinfo on AIX-based nagios servers, /usr/bin/snmpget on Linux-based nagios servers)
 #
 $snmpget = "/usr/bin/snmpinfo      -t 2 -w 5 -v 1 -c $community -h $hostname"   if ( -e "/usr/bin/snmpinfo" );
 $snmpget = "/usr/local/bin/snmpget -r 2 -t 5 -v 1 -c $community    $hostname"   if ( -e "/usr/local/bin/snmpget" );
