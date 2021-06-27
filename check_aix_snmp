@@ -3,14 +3,14 @@
 
 # CHANGE LOG
 # ----------
-#   2007/04/13	njeffrey@anisoftgroup.com	Script created
-#   2007/10/17	njeffrey@anisoftgroup.com	Add -r 2 -t 5 (retry 2 times, 5 second timeout for snmpget  commands)
-#   2007/10/17	njeffrey@anisoftgroup.com	Add -t 2 -w 5 (retry 2 times, 5 second timeout for snmpinfo commands)
+#   2007/04/13	njeffrey 	Script created
+#   2007/10/17	njeffrey 	Add -r 2 -t 5 (retry 2 times, 5 second timeout for snmpget  commands)
+#   2007/10/17	njeffrey 	Add -t 2 -w 5 (retry 2 times, 5 second timeout for snmpinfo commands)
 
 
 
 # Nagios check to confirm the status of the AIX SNMP agent
-# Written April 2007 by Nick Jeffrey <njeffrey@anisoftgroup.com>
+
 
 
 # NOTES
