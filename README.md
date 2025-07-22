@@ -2,7 +2,7 @@
 nagios check for AIX SNMP daemons
 
 # Requirements
-perl, snmpget|snmpinfo on nagios server
+perl, snmpget on nagios server
 
 # Configuration
 
