@@ -5,7 +5,6 @@
 # ----------
 #   2007/04/13	njeffrey 	Script created
 #   2007/10/17	njeffrey 	Add -r 2 -t 5 (retry 2 times, 5 second timeout for snmpget  commands)
-#   2007/10/17	njeffrey 	Add -t 2 -w 5 (retry 2 times, 5 second timeout for snmpinfo commands)
 #   2021/06/27	njeffrey 	Documentation updates
 #   2025/07/22	njeffrey 	Add --verbose parameter, break into subroutines
 
@@ -67,6 +66,7 @@ my ($opt_h,$opt_v,$opt_H,$opt_C);
 my ($OK,$WARN,$CRITICAL,$UNKNOWN,$CHECK_NAME);
 $CHECK_NAME="AIX SNMP";
 $verbose = "";
+$status = "";
 
 #
 # Nagios return codes
@@ -132,18 +132,25 @@ sub get_options {
 
 sub sanity_checks {
    #
-   # Find an appropriate SNMP query tool (/usr/bin/snmpinfo on AIX-based nagios servers, /usr/bin/snmpget on Linux-based nagios servers)
+   # Find an appropriate SNMP query tool 
    #
    print "running sanity_checks subroutine \n" if ($verbose eq "yes");
    #
-   if ( -e "/usr/bin/snmpinfo" ) {
-      $snmpget = "/usr/bin/snmpinfo      -t 2 -w 5 -v 1 -c $community -h $hostname"; 
-   }
-   elsif ( -e "/usr/bin/snmpget" ) {
+   if ( -e "/usr/bin/snmpget" ) {
       $snmpget = "/usr/bin/snmpget       -r 2 -t 5 -v 1 -c $community    $hostname";   
    }
    else {
-      print "$CHECK_NAME UNKNOWN - cannot find /usr/bin/snmpinfo or /usr/bin/snmpget command \n";
+      print "$CHECK_NAME UNKNOWN - cannot find /usr/bin/snmpget command \n";
+      exit $UNKNOWN; 
+   }
+   #
+   # confirm file is executable by current user
+   #
+   if ( (-e "$snmpget") && (  -x "$snmpget") ) {
+      print "   confirmed $snmpget exists and is executable by the current user \n" if ($verbose eq "yes");
+   }
+   if ( (-e "$snmpget") && (! -x "$snmpget") ) {
+      print "$CHECK_NAME UNKNOWN - $snmpget file is not executable by the current user \n";
       exit $UNKNOWN; 
    }
 }							#end of subroutine
@@ -155,10 +162,22 @@ sub ping_host {
    #
    print "running ping_host subroutine \n" if ($verbose eq "yes");
    #
-   $cmd = "ping -c 1 -w 1 $hostname 2>&1";
+   $cmd = "ping -c 4 $hostname";
    print "   running command: $cmd \n" if ($verbose eq "yes");
-   open(IN,"$cmd |");					#send a single ping to the remote host and wait 1 second for a reply
+   open(IN,"$cmd 2>&1 |") or die "ERROR: Cannot execute command $cmd $! \n";		#ping  the remote host
    while (<IN>) {                          		#read a line from STDIN
+      if ( / 0% packet loss/ ) {			#check for ping timeouts (indicates host may be down)
+         print "   ping successful: $_ \n" if ($verbose eq "yes");
+      } 						#end of if block
+      if ( /25% packet loss/ ) {			#check for ping timeouts (indicates host may be down)
+         print "   ping successful: $_ \n" if ($verbose eq "yes");
+      } 						#end of if block
+      if ( /50% packet loss/ ) {			#check for ping timeouts (indicates host may be down)
+         print "   ping successful: $_ \n" if ($verbose eq "yes");
+      } 						#end of if block
+      if ( /75% packet loss/ ) {			#check for ping timeouts (indicates host may be down)
+         print "   ping successful: $_ \n" if ($verbose eq "yes");
+      } 						#end of if block
       if ( /100% packet loss/ ) {			#check for ping timeouts (indicates host may be down)
          $status = "$CHECK_NAME UNKNOWN -- no ping reply from $hostname \n";
          print $status;					#print error message
@@ -191,9 +210,9 @@ sub check_hr_mib {
    #
    print "running check_hr_mib subroutine \n" if ($verbose eq "yes");
    $oid = ".1.3.6.1.2.1.25.1.1.0";
-   $cmd = "$snmpget $oid 2>&1";
+   $cmd = "$snmpget $oid";
    print "   running command: $cmd \n" if ($verbose eq "yes");
-   open(IN,"$cmd |"); 					#open a filehandle for reading 
+   open(IN,"$cmd 2>&1 |") or die "ERROR: Cannot execute command $cmd $! \n"; 	#open a filehandle for reading 
    while (<IN>) {                          		#read a line from STDIN
       if ( /Timeticks/ ) {                		#look for a response to the snmp query
          $status = "$CHECK_NAME OK -- SNMP response from $hostname on $oid \n";
@@ -214,9 +233,9 @@ sub check_aix_mib {
    #
    print "running check_aix_mib subroutine \n" if ($verbose eq "yes");
    $oid = ".1.3.6.1.4.1.2.6.191.1.2.1.0";
-   $cmd = "$snmpget $oid 2>&1";
+   $cmd = "$snmpget $oid";
    print "   running command: $cmd \n" if ($verbose eq "yes");
-   open(IN,"$cmd |"); 					#open a filehandle for reading 
+   open(IN,"$cmd 2>&1 |") or die "ERROR: Cannot execute command $cmd $! \n";	#open a filehandle for reading 
    while (<IN>) {                          		#read a line from STDIN
       if ( /INTEGER/ ) {                 		#look for a response to the snmp query
          $status = "$CHECK_NAME OK -- SNMP response from $hostname on $oid \n";
@@ -237,9 +256,9 @@ sub check_xmd_mib {
    #
    print "running check_xmd_mib subroutine \n" if ($verbose eq "yes");
    $oid = ".1.3.6.1.4.1.2.3.1.2.2.2.1.1.1.1.1";
-   $cmd = "$snmpget $oid 2>&1";
+   $cmd = "$snmpget $oid";
    print "   running command: $cmd \n" if ($verbose eq "yes");
-   open(IN,"$cmd |"); 					#open a filehandle for reading 
+   open(IN,"$cmd 2>&1 |") or die "ERROR: Cannot execute command $cmd $! \n"; 	#open a filehandle for reading 
    while (<IN>) {                          		#read a line from STDIN
       if ( /INTEGER/ ) {                 		#look for a response to the snmp query
          $status = "$CHECK_NAME OK -- SNMP response from $hostname on $oid \n";
