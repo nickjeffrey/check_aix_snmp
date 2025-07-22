@@ -28,7 +28,7 @@ You will also need a command definition similar to the following in the commands
     # adjust SNMP community name as appropriate
     define command{
        command_name    check_aix_snmp
-       command_line    $USER1$/check_aix_snmp --community=$ARG1$ $HOSTADDRESS$
+       command_line    $USER1$/check_aix_snmp --community=$ARG1$ --host=$HOSTADDRESS$
        }
                                                                                   
 ```
