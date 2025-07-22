@@ -32,3 +32,11 @@ You will also need a command definition similar to the following in the commands
        }
                                                                                   
 ```
+
+# Sample Output
+```
+AIX SNMP OK -- SNMP response from aixhost.example.com on .1.3.6.1.4.1.2.3.1.2.2.2.1.1.1.1.1
+```
+```
+AIX SNMP CRITICAL -- no SNMP response from aixhost.example.com on .1.3.6.1.4.1.2.3.1.2.2.2.1.1.1.1.1.    This is the AIX MIB.  Confirm $hostname runs AIX, and the relevant section is uncommented from /etc/snmpdv3.conf
+```
